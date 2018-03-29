@@ -1,0 +1,1085 @@
+Which chemical properties influence the quality of white wines? by Mae Linh Fatum
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+wine_qual <- read.csv('C:/Users/maeli/Desktop/Udacity/EDA/Project 2/wineQualityWhite_ratings.csv')
+wine_qual$Unnamed..0<-NULL
+wine_qual$X<-NULL
+
+```
+
+# Background
+I will be the first to  admit I know nothing about wine.  I hoping that learning about the physicochemical properties in good wines will help me choose good wines to gift my friends instead of my usual method, 'oooo, what a pretty label!'.  When I do drink wines I tend to lean towards the sweeter whites, so that is why I decided to explore the white wine data.
+
+There are 4898 observations with 13 variables as detailed below.
+
+The following variables are being analyzed:
+* fixed acidity (tartaric acid - g / dm^3)
+* volatile acidity (acetic acid - g / dm^3) - high levels give a vinegar like quality.
+* citric acid (g / dm^3)- add 'freshness' and flavor to wines
+* residual sugar (g / dm^3) - sweet wines have >45 g/dm^3
+* chlorides (sodium chloride - g / dm^3) - amount of salt
+* free sulfur dioxide (mg / dm^3) - dissolved S02 gas.  prevents microbial growth and oxidation of wine.becomes evident in nose and taste at >50 mg /dm^3)
+* total sulfur dioxide (mg / dm^3) - contains both free and fixed forms.
+* density (g / cm^3) - changes depending on alcohol and sugar content.  Note: density of water = 1, alcohol <1, sugar >1
+* pH - 0 (very acidic) to 14 (very basic).  Most wines are 3-4
+* sulphates (potassium sulphate - g / dm3) - creates SO2.  antimicrobial and antioxidant
+* alcohol (% by volume)
+   Output variable (based on sensory data): 
+* quality (score between 0 and 10) - 0 (very bad) to 10 (excellent)
+* rating (category) - Categorical classification of the quality score.  Poor wines scored between 0-3, average wines scored between 4- 6, and excellent wines scored between 7-10.
+  + Note: I added this column to the table in python, because I am more familar with python for data wrangling efforts.
+
+The background text explains that these observations are for white variants of the Portuguese "Vinho Verde" wine.  Also the quality of wine is not evenly distributed (a lot more average wines than poor or excellent ones.)  Also they weren't sure if every variable is relevant so I guess that is for me to figure out!
+
+
+# Univariate Plots Section
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(wine_qual)
+```
+
+Whoa there is a massive outlier in residual sugar.  the max point is 65.8, when the 75% is only at 9.9.  According to the documentation, 'wines with greater than 45 grams/liter are considered sweet', and in my limited wine knowledge I know that people have their preferences for dry or sweet wine.  Gonna break the data set up into dry wines (sugar <45) and sweet wines (sugar >45)
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dry_wine_qual <- subset(wine_qual, wine_qual$residual.sugar<45)
+
+
+sweet_wine_qual<-subset(wine_qual, wine_qual$residual.sugar>=45)
+
+print( 'dry wine summary')
+summary(dry_wine_qual)
+print('sweet wine summary')
+summary(sweet_wine_qual)
+```
+
+Okay so there is only one sweet wine, so I can't really do any analysis on that.  I will move forward with only the dry wines.
+
+Interesting points: 
+- citric acid has a minimum value of 0.0, which after a little bit of research is okay.  Not all wines have citric acid.
+- Volatile acidity (VA), sugar, free sulfur dioxide (free SO2), density, and sulphates have outliers on the high end.
+- fixed acidity(FA), total SO2, citric acid (CA), and pH have outliers on both ends.
+
+Let's investigate these outliers and see if they are all from the same wine,  if so, we can safely remove from our analysis.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+high_outliers<- subset(dry_wine_qual, 
+                       dry_wine_qual$volatile.acidity>0.485 |
+                         dry_wine_qual$residual.sugar<22.2|
+                         dry_wine_qual$free.sulfur.dioxide> 80.5 |
+                         dry_wine_qual$density > 1.0027 | 
+                         dry_wine_qual$sulphates > 0.76)
+
+deduped.data <- unique( high_outliers[ , 2:13] )
+```
+
+Can't disregard the outliers because there isn't one wine that has all of them.  Our outlier set has 3940 observations, so almost every single wine has an outlier quality of some sort.  So in short we got lots of outliers in all the categories except alcohol and chlorides.  So we will be zooming into the data using coor_cartesian to preserve the values, but getting plots of the majority of the data.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+qplot(x = fixed.acidity, data = dry_wine_qual)+
+  geom_histogram(binwidth = 0.1)
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = fixed.acidity, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(3,11))
+  
+```
+
+Fixed acidity was normally distributed, no transformation needed.  Let's look at the rating break down.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = fixed.acidity, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(3,11))+
+  facet_wrap(~rating, scales = 'free_y')
+```
+
+All the ratings peak at around the same point and they still maintain a generally normal distribution.  FA is not a factor.  Let's run some t.tests to be sure
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test(poor_wines$fixed.acidity, avg_wines$fixed.acidity)
+t.test(poor_wines$fixed.acidity, exc_wines$fixed.acidity)
+t.test(avg_wines$fixed.acidity, exc_wines$fixed.acidity)
+```
+
+Well, I retract my previous statement.  there is a significant difference in the mean of fixed acidity for excellent and average and poor wines, but there is no significant difference between poor and average means.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = volatile.acidity, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = volatile.acidity, data = dry_wine_qual, binwidth = 0.005)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0,0.8))
+  
+```
+
+Volatile acidity was left skewed so let's see if a transformation makes it normal:
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = volatile.acidity, data = dry_wine_qual, binwidth = 0.005)+
+  geom_histogram()+
+  scale_x_sqrt()
+  
+```
+
+That did the trick, so in order to compare VA with the other data we need to first take the square root.  I decided to do the square root instead of log 10 because the data didn't have enough of a spread for a logritmic scale.  the square root did the job nicely!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = volatile.acidity, data = dry_wine_qual, binwidth = 0.05, 
+      main = 'volatile acidity (acetic acid - g / dm^3) [sqrt. transform]')+
+  geom_histogram()+
+  scale_x_sqrt()+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+VA is a factor in determining wine quality because the three graphs have the roughly the same shape, but the peak at slightly different values.  Let's run a t-test to see if the differences are significant
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dry_wine_qual$trans_VA <- sqrt(dry_wine_qual$volatile.acidity)
+
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test (avg_wines$trans_VA, poor_wines$trans_VA)
+t.test (avg_wines$trans_VA, exc_wines$trans_VA)
+t.test(poor_wines$trans_VA, exc_wines$trans_VA)
+```
+
+There is a significant difference in the mean amount of the sqaure root of the volatile acidity between excellent wines and poor and average wines.  However there is no signficant difference between poor and average wines.  Still there is some significance so VA is a factor!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = citric.acid, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = citric.acid, data = dry_wine_qual, binwidth = 0.005)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0,0.8))
+  
+```
+
+citric acid normally distributed, so the mean is an appropiate average, no transformation necessary
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = citric.acid, data = dry_wine_qual, binwidth = 0.05, 
+      main = 'citric acid - g / dm^3)')+
+  geom_histogram()+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+Looks like we have peaks at different levles so let's see if it is significantly different!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+t.test(avg_wines$citric.acid, poor_wines$citric.acid)
+t.test(avg_wines$citric.acid, exc_wines$citric.acid)
+t.test(poor_wines$citric.acid, exc_wines$citric.acid)
+```
+
+there is only a difference between average and excellent wines, so citric acid is a faint contender.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = residual.sugar, data = dry_wine_qual, binwidth = 0.5)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = residual.sugar, data = dry_wine_qual, binwidth = 0.5)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0,25))
+  
+```
+
+Definately skewed.  Lets try a transform!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = residual.sugar, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()+
+  scale_x_log10()
+  
+```
+
+the sqrt transform resulted in a left skewed graph.  When I did a log 10 transformation I see the the residual sugar is bimodal.  Let's see how the different ratings fit into that
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = residual.sugar, data = dry_wine_qual, binwidth = 0.25)+
+  geom_histogram()+
+  scale_x_log10()+
+  facet_wrap(~rating, scales = 'free_y')
+
+
+```
+
+Poor and average wines have more wines coming in at the higher sugar peak, while excellent wines have more wines with lower sugar contents.  Sounds like a contender!  We can't do a t-test since the data is bimodal.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = chlorides, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = chlorides, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0, 0.1))
+  
+```
+
+The chloride levels are  skewed, let's trasform!.
+
+```{r echo =FALSE, message=FALSE, warning=FALSE}
+qplot(x = chlorides, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0.01, 0.1))+
+  scale_x_sqrt()
+  
+```
+
+Look at the beautful normal curve.  sqrt transformation did the trick!
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = chlorides, data = dry_wine_qual, binwidth = 0.01, 
+      main = 'salt levels (g/L) - zoomed in')+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0.01, 0.1))+
+  scale_x_sqrt()+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+Looks like the peaks are at slight different places.  T-test time!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dry_wine_qual$trans_C <- sqrt(dry_wine_qual$chlorides)
+
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test(poor_wines$trans_C, avg_wines$trans_C)
+t.test(poor_wines$trans_C, exc_wines$trans_C)
+t.test(avg_wines$trans_C, exc_wines$trans_C)
+
+```
+
+there is a significant difference in the means chloride levels for average and excellent wines.  Like citric acid, it might be a determining factor between average and excellent wines.  I also created a new variable (trans_C) which is the sqrt of the chloride amount.  Will be using theis value in investigations.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = free.sulfur.dioxide, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = free.sulfur.dioxide, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0,100))
+  
+```
+
+slightly skewed, lets transform!
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = free.sulfur.dioxide, data = dry_wine_qual, binwidth = 0.1)+
+  geom_histogram()+
+  scale_x_sqrt()+
+  coord_cartesian(xlim = c(0,100))
+```
+
+The sqrt transformation did it!  Looking nice and normal.  Let's see the ratings distribution.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = free.sulfur.dioxide, data = dry_wine_qual, binwidth = 0.5)+
+  geom_histogram()+
+  scale_x_sqrt()+
+  coord_cartesian(xlim=c(0, 125))+
+  facet_wrap(~rating, scales = 'free_y')
+```
+
+average and excellent wine have about the same distributions, but the poor wines have multiple peaks.  free SO2 isn't a major determining factor for wine quality but might want to explore the poor wine free SO2 rating with other variables.  let's do a t.test to be sure.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+dry_wine_qual$trans_fSO2 <- sqrt(dry_wine_qual$free.sulfur.dioxide)
+
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test(poor_wines$trans_fSO2, avg_wines$trans_fSO2)
+t.test(poor_wines$trans_fSO2, exc_wines$trans_fSO2)
+t.test(avg_wines$trans_fSO2, exc_wines$trans_fSO2)
+
+```
+
+There is no significant difference in the sqrt of the free SO2 levels in wine.  NOT a contender!
+
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = total.sulfur.dioxide, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = total.sulfur.dioxide, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0,300))
+  
+```
+
+Total SO2 is skewed, so let's transform it!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = total.sulfur.dioxide, data = dry_wine_qual, binwidth = 0.1)+
+  geom_histogram()+
+  scale_x_sqrt()
+  
+```
+
+Much better! A sqrt transform was the answer.  Let's check out the ratings.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x =total.sulfur.dioxide, data = dry_wine_qual, binwidth = 1)+
+  geom_histogram()+
+  scale_x_sqrt()+
+  facet_wrap(~rating, scales = 'free_y')
+```
+
+Whoa, it looks like poor wines have more total SO2 than average and excellent wines.  Let's do a t-test and see!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dry_wine_qual$trans_TSO2 <- sqrt(dry_wine_qual$total.sulfur.dioxide)
+
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test(poor_wines$trans_TSO2, avg_wines$trans_TSO2)
+t.test(poor_wines$trans_TSO2, exc_wines$trans_TSO2)
+t.test(avg_wines$trans_TSO2, exc_wines$trans_TSO2)
+
+```
+
+Well that wasn't what I expected!  There is a significant difference between average and excellent meanof the sqrt of total SO2 levels, but no significant difference between poor wines and the other ratings.  Still a contender.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = density, data =dry_wine_qual, binwidth = 0.0005)+
+  geom_histogram()
+  
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = density, data = dry_wine_qual, binwidth = 0.0005)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0.985,1.005))
+  
+```
+
+Density is slightly skwed, but it is so tightly clustered I don't think there will be much difference between the ratings.  I'm not gonna transform this one due to the tightness of the data.Let's check the ratings.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = density, data = dry_wine_qual, binwidth = 0.0005)+
+  geom_histogram()+
+  coord_cartesian(xlim = c(0.985,1.005))+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+Hmmm, there are some different peaks, let's do some t.tests for kicks and giggles.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(poor_wines$density, avg_wines$density)
+t.test(poor_wines$density, exc_wines$density)
+t.test(avg_wines$density, exc_wines$density)
+```
+
+Spoke too soon, there are significant differences between the mean density of excellent wines and poor or average wines.  No diff in poor and avg tho.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = pH, data = dry_wine_qual, binwidth = 0.05)+
+  geom_histogram()
+  
+```
+
+the pH is almost normally distributed.  Let's check those ratings!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = pH, data = dry_wine_qual, binwidth = 0.05)+
+  geom_histogram()+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+It looks like poor wine has a slighter higher (less acidic) pH than the other ratings.  t.tests to confirm!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+t.test(poor_wines$pH, avg_wines$pH)
+t.test(poor_wines$pH, exc_wines$pH)
+t.test(avg_wines$pH, exc_wines$pH)
+```
+
+Looks like there is a signifcant difference between the average and excellent wines, but not between poor and any other!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = sulphates, data = dry_wine_qual, binwidth = 0.05)+
+  geom_histogram()
+  
+```
+
+Sulphates are slightly skewed to the left so let's transform them!
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = sulphates, data = dry_wine_qual, binwidth = 0.05)+
+  geom_histogram()+
+  scale_x_sqrt()
+  
+```
+
+Much better.  sqrt transformation did the trick.  Let's check out the ratings:
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = sulphates, data = dry_wine_qual, binwidth = 0.05, main = 'sulphates - g / dm^3)')+
+  geom_histogram()+
+  scale_x_sqrt()+
+  facet_wrap(~rating, scales = 'free_y')
+  
+```
+
+Looking pretty similar, but let's do the t-tests just to be sure!
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dry_wine_qual$trans_sulp <- sqrt(dry_wine_qual$sulphates)
+
+avg_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='average')
+poor_wines <- subset(dry_wine_qual, dry_wine_qual$rating=='poor')
+exc_wines <- subset(dry_wine_qual, dry_wine_qual$rating == 'excellent')
+
+t.test(poor_wines$trans_sulp, avg_wines$trans_sulp)
+t.test(poor_wines$trans_sulp, exc_wines$trans_sulp)
+t.test(avg_wines$trans_sulp, exc_wines$trans_sulp)
+
+```
+
+Glad I checked.  there is a significant difference between the mean of the sqrt of the sulphate levels for avergae and excellent wines, not with poor wines.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+qplot(x = alcohol, data = dry_wine_qual, binwidth = 0.5)+
+  geom_histogram()
+  
+```
+
+Alcohol very left skewed with a peak at about 9.5 grams / liter (mean = 10.51 and median =10.4).  Gonna see if plot the log(10) of the Alcohol content will normalize the graph.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+qplot(x = alcohol, data = dry_wine_qual, binwidth = 0.01)+
+  geom_histogram()+
+  scale_x_sqrt()
+```
+
+Neither the log nor the sqrt helped.  The log10() give multiple peaks, but a generally normalize shape.  Not going to apply a transformation here, since neither transformed the data.  Let's see if the ratings grouping of the original data has any insights.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+qplot(x = alcohol, data = dry_wine_qual, binwidth = 0.5)+
+  geom_histogram()+
+  facet_wrap(~rating, scales = 'free_y')
+```
+
+definately have some different distributions.  Lets run the t.tests and find out how significant these differences are.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+t.test(poor_wines$alcohol, avg_wines$alcohol)
+t.test(poor_wines$alcohol, exc_wines$alcohol)
+t.test(avg_wines$alcohol, exc_wines$alcohol)
+  
+```
+
+No significant difference between the mean alcohol content of poor and average wine, but there is a significant difference between excellent and poor or average wine.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+qplot(x = quality, data = dry_wine_qual, binwidth = 1, fill = rating)+
+  geom_histogram()
+  
+```
+
+It is clear to see that we have a lot more average wines than any other rating.  At least excellent wines are visible, while poor wines just aren't even a contender.
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+wine_qual has 4898 observations and originally 11 variables.  10 of the variables are based on physiochemcial tests on the wine and one (quality)is based on sensory input from wine critics.  White can either be sweet or dry and so I wanted to seperate these wines from themselves.  It turns out there is only one sweet wine (residual sugar >45 g/L), so I just excluded it from my data set.  I created a categorical variable, rating, in which I assigned a rating to a group od quality scores.  Poor wines score between 0 and 3, average wines scored between 4 and 6, and excellent wines scored between 7 and 10.  There are 20 poor wines, 3817 average wines, and 1060 excellent wines. I also performed transformations on the following variables to normalize their data: volatile acidity, chlorides, free sulfur dioxide, total sulfur dioxide, and sulphates all recieved a sqrt transformation.  Sugar recieves a log_10 transformation
+
+### What is/are the main feature(s) of interest in your dataset?
+I want to figure out which chemical properties lead to a higher wine rating.  Pretty much every chemical property yeilded a statsitically significant difference in their mean values between average and excellent wine.  The only exception was free sulfur dioxide.  However, only a few yeilded statstically significant differences between their mean values between poor and excellent wines.  These variables are fixed acidity, the sqrt of volatile acidity, density, and alcohol.  I will be investigate these variables further in the bivartiate plot section.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+Even though free sulfur dioxide didn't yeild stastically significant differences in mean values for the ratings, it has an interesting property.  If the free sulfur levels are above 50 ppm, they are detectable and so it would be interesting to see how detectable free sulfur dioxide levels affect the ratings.  Also residual sugar had an interesting result.  When I did a logrithmic transformation on it, it turned out to be bimodal.  the ratings reflected this distribution as well, but excellent wines had larger peak for lower sugar amounts, while average and excellent wine had the larger peak for higher sugar amounts.
+
+### Did you create any new variables from existing variables in the dataset?
+I created a factor variable called 'rating' to give qualitative meaning to the 'quality' measure.  In the next section I plan on using these ratings to see what range each rating has in each of the physiochemical properties.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+I preformed sqrt transformations on volatile acidity, chlorides, free and total sulfur dioxide, and sulphates.  I did this transformation to normalize the data, so I can compare it to other data down the line.  I also performed a log 10 transformation on residual sugar to normalize it, but I ended up with a bimodal distribution.  the sqrt transformation didn't help normalize the data, so it'll be interesting to see what behavior shows up when comparing other variables to sugar!
+
+# Bivariate Plots Section
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(GGally)
+library(scales)
+library(memisc)
+
+dry_wine_qual$trans_sug<-log10(dry_wine_qual$residual.sugar)
+dry_wine_qual2<-dry_wine_qual
+to_delete = c('volatile.acidity', 'chlorides', 'free.sulfur.dioxide',
+              'total.sulfur.dioxide', 'sulphates', 'al.dec', 'trans_fSO2',
+              'residual.sugar', 'quality')
+dry_wine_qual2<-dry_wine_qual2[ , !(names(dry_wine_qual2) %in% to_delete)]
+
+
+```
+
+dry_wine_qual2 will be my main dataframe for the bivariate analysis.  I deleted the orginal forms of the the transformed varialbes (volatile acidity, chlorides, total sulfur dioxide, sugar and suplhates).  I also deleted the free.sulfur.dioxide and its transformed column because there wasn't a significant difference in its mean values between ratings.  I also deleted the quality column because I'm going to use my rating columns to perform my analysis, not the specific numerical scores.
+
+```{r echo= FALSE, message=FALSE, warning=FALSE}
+ggpairs(dry_wine_qual2, 
+        lower = list(continuous = wrap("points", shape = I('.'))),
+        upper = list(combo = wrap("box", outlier.shape = I('.'))))
+
+ggsave('bivarate_sum.png')
+```
+
+Need to reorder my rating factors (right now its alphabetical) and I want to take a closer look at the boxplots for quality and other variables.  I don't need to really investigate density since the values are so tightly clustered around 0.99
+
+No suprise that sugar and alcohol have a strong relationship with density.  I'm surprised chlorides didn't, since salt can greatly affect the density of a liquid.  Most other relationships were weakly correlated.  We are interested in investigating the physiochemical traits that result in a high quality rating. so let's start at the histograms and boxplots.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+table(dry_wine_qual2$rating)
+dry_wine_qual2$rating<-factor(dry_wine_qual2$rating, 
+                              levels = c('poor', 'average', 'excellent'))
+
+fixed_acidity_box <-qplot(dry_wine_qual2$rating, dry_wine_qual2$fixed.acidity, 
+                          geom = 'boxplot', 
+                          main = 'fixed acidity - tartaric acid', 
+                          xlab = 'rating', 
+                          ylab = 'fixed acidity (g/L)')+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+fixed_acidity_box
+
+ratings <-c('poor', 'average', 'excellent')
+FA_means <- c(mean(poor_wines$fixed.acidity), mean(avg_wines$fixed.acidity), mean(exc_wines$fixed.acidity))
+            
+```
+
+I already know that the differences are significant, and it seems that the median fixed acidity levels decrease as the ratings get better.  Also there are a lot of outliers.
+
+A note of all the t-tests done in the previous sections.  They have to be unpaired t-tests because each rating doesn't have the same number of observations.  Also there are not that many poor ratings so that could be a reason for no significant difference between poor and average ratings.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+
+trans_VA_box <-qplot(dry_wine_qual2$rating, dry_wine_qual2$trans_VA, 
+                          geom = 'boxplot', 
+                          main = 'fixed acidity - tartaric acid', 
+                          xlab = 'rating', 
+                          ylab = 'fixed acidity (g/L)')+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)      
+
+trans_VA_box
+TVA_means<- c(mean(poor_wines$trans_VA), mean(avg_wines$trans_VA), mean(exc_wines$trans_VA))
+means.data <-data.frame(ratings, FA_means, TVA_means)
+```
+
+Again I know that the difference between the means is statistically significant, the medians don't show a particular pattern, but looking at the table of means so far, the mean value of the sqrt of the volatile acid decreases as the rating improves.
+
+```{r echo = FALSE, message= FALSE, warning=FALSE}
+
+density_box <-qplot(dry_wine_qual2$rating, dry_wine_qual2$density,
+                    geom = 'boxplot',
+                    main = 'density of wine',
+                    xlab = 'rating',
+                    ylab = 'density (g/cm^3)')+
+   stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+density_box
+
+D_means<- c(mean(poor_wines$density), mean(avg_wines$density), mean(exc_wines$density))
+means.data <-data.frame(ratings, FA_means, TVA_means, D_means)
+```
+
+There are quite a few outlierrs on the average and excellent ratings.  I already know the difference of the means is significant, so it appears that as the rating improves the density decreases.
+
+```{r echo = FALSE}
+
+alcohol_box <-qplot(dry_wine_qual2$rating, dry_wine_qual2$alcohol,
+                    geom = 'boxplot',
+                    main = 'alcohol content',
+                    xlab = 'rating',
+                    ylab = 'alcohol content (% by volume)')+
+   stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+alcohol_box
+
+AL_means<- c(mean(poor_wines$alcohol), 
+             mean(avg_wines$alcohol), 
+             mean(exc_wines$alcohol))
+means.data <-data.frame(ratings, FA_means, TVA_means, D_means, AL_means)
+```
+
+There are a few outliers for the average rating, but it is clear that the higher rating has the higher alcohol content.
+
+```{r echo=FALSE}
+print(means.data)
+```
+
+The t tests for these four variables reveales that the difference of thier mean values is significant.  Findings:
+* Fixed acidity (FA) decreases as rating increases.
+* sqrt of the volatile acidity decreases as rating increases
+* density decreases as rating increases
+* alcohol content is about the same for poor and average wines, but it is higher for excellent wines.
+
+Looking forward to exploring these variables in more depth in the next section!
+Only explored these variables because they allowed us to reject the null hypothesis of no difference between the means of the values for each rating.
+
+Let's now take a look at sugar.  I want to explore sugar because it had a bimodal distribution over all and for each rating.  The excellent wines had a higher peak at lower sugar levels than poor or average wines.  
+
+sugar also has a strong realtionship with density and a weak relationship with total sulfur dioxide.
+
+```{r echo =FALSE}
+poor_wines$trans_sug<-log10(poor_wines$residual.sugar)
+avg_wines$trans_sug<-log10(avg_wines$residual.sugar)
+exc_wines$trans_sug<-log10(exc_wines$residual.sugar)
+
+print('poor wine log10 sugar summary')
+print(summary(poor_wines$trans_sug))
+print('average wine log10 sugar summary')
+print(summary(avg_wines$trans_sug))
+print('excellent wine log10 sugar summary')
+print(summary(exc_wines$trans_sug))
+```
+
+There is no clear pattern here, average wine have a higher mean than both poor and excellent, but excellent wines have a lower mean than poor wines.  maybe some patterns will emerge when sugar is compared to other values.
+
+```{r echo = FALSE}
+ggplot(dry_wine_qual, aes(x=trans_sug, color=rating))+ 
+  geom_density()
+```
+
+Here we can see that more excellent wines peak at a lower sugar level, while average a poor wines have a higher peak at higher sugar levels.  I would say sugar level isn't a major determining factor, since all three ratings share peaks at about the same place, but it is clear that more excellent wines have a lower sugar amount than average or excellent wines.
+
+```{r echo= FALSE}
+sugar_D<-ggplot(aes(trans_sug, density),data= dry_wine_qual2)+
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = 'lm')
+sugar_D
+```
+
+the transformation of sugar and density had a strong correlation.  As the sugar increases, so does the dentsity.  That makes sens since density is dervived from the components in the liquid.  There is a bit of an odd ball point out there.  Definately wantt to add ratings to this chart to see if there are more patterns.
+
+
+```{r echo = FALSE}
+sugar_TSO2<-ggplot(aes(dry_wine_qual$trans_TSO2, dry_wine_qual$trans_sug),
+                   data = dry_wine_qual2,
+                   xlab = 'sqrt of total sulfur dioxide (mg/L)',
+                   ylab = 'log10 of residual sugar (g/L)')+
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = 'lm')
+sugar_TSO2
+```
+
+as the amount of total sulfur dioxide increases, the amount of residual sugar increases as well.  Can't wait to see what the ratings will tell us! Note: used dry_wine_qual because I hadn't added the transformed sugar variable to dry_wine_ qual2
+
+```{r echo = FALSE}
+D_TSO2<-ggplot(aes(dry_wine_qual2$trans_TSO2, dry_wine_qual2$density),
+               data = dry_wine_qual2,
+               xlab = 'sqrt of total sulfur dioxide (mg/L)',
+               ylab = ' density (g/cm^3)')+
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = 'lm')
+
+D_TSO2
+```
+
+total sulfur dioxide and density have a moderate relationship as show inn the plot.  as the amount of total sulfur dioxide increases the density increases.  
+
+```{r echo=FALSE}
+ggplot(aes(dry_wine_qual2$alcohol, dry_wine_qual$density),
+       data = dry_wine_qual2,
+       xlab = 'alcohol content (% per volume)',
+       ylab = 'density (g/cm^3)')+
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = 'lm')
+```
+
+As the alcohol content increases, the density decreases.  Choose to look at this graph because it has one of the strongest correlations in the ggpairs plot.  Definately wantt to look at this plot with ratings and see if there are any patterns
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+I investgated the four chemical properties that displayed statistically significant differences for their mean values between the ratings.  These chemical properties are the fixed acidity, the square root of the volatile acidity, the density, and the alchol content.  I found that the mean value for all of them except alcohol content decreases as the rating increased.  For alcohol content then mean increases as the rating increases.
+
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+I also looked at the relationships that displayed some amount of correlation on the ggpairs summary.  I looked at density with , alcohol, sugar, and the square root of the total amount of sulfur dioxide.  The density decreases when alcohol increases, density increases when sugar and total sulfur dioxide increases.  Another relationship I looked at was the sqrt of total sulfur dioxide and sugar. The data points seem to be in two big clusters, so I really want to add ratings to that graph to see if any patterns show up.
+
+### What was the strongest relationship you found?
+density was strongly related to sugar and alcohol.  This isn't suprising since the density of a liquid is determined by the components in the liquid.  More sugar suggests a higher density which makes sense since the density of sugar is greater than 1.  More alcohol suggests a lower density which also makes sense since the density of alcohol is less than one.  
+
+# Multivariate Plots Section
+
+the sqrt of free sulfur dioxide didn't yeild any significant differences bewteen its mean values for the different ratings.  I will use this to build plots with my four variables of interest (fixed acidity, sqrt of volatile acidity, density, and alcohol) and add rating as a color to see if any patterns arise.
+
+```{r echo=FALSE, Multivariate_Plots}
+acid_fixed_A <- ggplot(aes(x = trans_fSO2, y = fixed.acidity, 
+                           color = rating), 
+                       data = dry_wine_qual)+
+  geom_smooth(data = subset(dry_wine_qual, 
+                            dry_wine_qual$rating == 'average'), 
+              method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, 
+                            dry_wine_qual$rating == 'excellent'), 
+              method = 'lm')+
+  geom_point(data = subset(dry_wine_qual, 
+                           dry_wine_qual$rating == 'poor'))+
+  geom_vline(xintercept = sqrt(50), color = 'red')+
+  geom_hline(yintercept = mean(dry_wine_qual$fixed.acidity))
+
+print(acid_fixed_A)
+  
+acid_volatile <- ggplot(aes(x = trans_fSO2, y = trans_VA,
+                            color = rating),
+                        data = dry_wine_qual)+
+  geom_smooth(data = subset(dry_wine_qual, 
+                            dry_wine_qual$rating == 'average'), 
+              method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, 
+                              dry_wine_qual$rating == 'excellent'), 
+              method = 'lm')+
+  geom_point(data = subset(dry_wine_qual, 
+                             dry_wine_qual$rating == 'poor'))+
+  geom_vline(xintercept = sqrt(50), color = 'red')+
+  geom_hline(yintercept = mean(dry_wine_qual$trans_VA))
+
+print(acid_volatile)
+
+density_rating <- ggplot(aes(x = trans_fSO2, y = density, 
+                             color = rating), data = dry_wine_qual)+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'average'), 
+              method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'excellent'),
+              method = 'lm')+
+  geom_point(data = subset(dry_wine_qual, dry_wine_qual$rating == 'poor'))+
+  geom_vline(xintercept = sqrt(50), color = 'red')+
+  geom_hline(yintercept = mean(dry_wine_qual$density))
+
+print(density_rating)
+  
+alcohol_rating<- ggplot(aes(x = trans_fSO2, y = alcohol, color = rating), 
+                        data = dry_wine_qual)+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'average'),
+              method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'excellent'),
+              method = 'lm')+
+  geom_point(data = subset(dry_wine_qual, dry_wine_qual$rating == 'poor'))+
+  geom_vline(xintercept = sqrt(50), color = 'red')+
+  geom_hline(yintercept = mean(dry_wine_qual$alcohol))
+
+print(alcohol_rating)
+  
+```
+
+The vertical red line represents the detectable threshold for free sulfur dioxide.  the horizontal line represents the mean value for that y-value.  I chose to smooth the average and the excellent ratings because they have so many more points than the poor rating, that it was impossible to see the poor ratings at all.  Also the poor ratings were just all over the map, so there really isn't any clear relationship betwen our four variables and a poor rating.
+
+* Fixed acidity - for undetectable levels of free SO2, average wines contain more fixed acidity.  For detectable levels of free SO2, excellent wines generall contain more fixed acidity.
+
+* volatile acidity = Also known as the spoilage factor (http://waterhouse.ucdavis.edu/whats-in-wine/volatile-acidity).  generally average wines contain more volatile acidity than excellent wines. (negative slope)
+
+* density = average wines have a higher density than excellent wines.
+
+* alcohol = excellent wines have a high alcohol content than average wines.
+
+```{r echo = FALSE}
+
+ggplot(aes(x =alcohol, y = density, color = rating), data = dry_wine_qual)+
+  geom_jitter(alpha = 0.3)+
+  geom_hline(yintercept = mean(dry_wine_qual$density))+
+  geom_vline(xintercept = mean(dry_wine_qual$alcohol))
+  
+```
+
+black lines represent the means for each value.  excellent wines tend to have higher than averge alcohol content and lower than average densities.
+
+```{r echo = FALSE}
+
+ggplot(aes(x =trans_VA, y = density, color = rating), data = dry_wine_qual)+
+  geom_point(alpha = 0.3)+
+  geom_hline(yintercept = mean(dry_wine_qual$density))+
+  geom_vline(xintercept = mean(dry_wine_qual$trans_VA))
+  
+```
+
+Excellent wines tend NOT to have higher than average volatile acidity and higher than average densities.  
+
+```{r echo = FALSE}
+
+ggplot(aes(x =fixed.acidity, y = density, color = rating), data = dry_wine_qual)+
+  geom_point(alpha = 0.3)+
+  geom_hline(yintercept = mean(dry_wine_qual$density))+
+  geom_vline(xintercept = mean(dry_wine_qual$fixed.acidity))
+  
+```
+
+The black lines represent the averages for each value.
+ Excellent wines tend to have lower than average density and fixed acidity.
+
+```{r echo = FALSE}
+
+ggplot(aes(x =alcohol, y = fixed.acidity, color = rating), data = dry_wine_qual)+
+  geom_point(alpha = 0.3)+
+  geom_hline(yintercept = mean(dry_wine_qual$fixed.acidity))+
+  geom_vline(xintercept = mean(dry_wine_qual$alcohol))
+  
+```
+
+excellent wines have higher than average alcohol content.  no conclusion for fixed acidity though.
+
+```{r echo = FALSE}
+
+ggplot(aes(x =alcohol, y = volatile.acidity, color = rating), data = dry_wine_qual)+
+  geom_point(alpha = 0.3)+
+  geom_hline(yintercept = mean(dry_wine_qual$volatile.acidity))+
+  geom_vline(xintercept = mean(dry_wine_qual$alcohol))+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating=='excellent'), 
+              method = 'lm')
+  
+```
+
+as the alcohol content of excellent wine increases the amount of volatile acid increases.
+
+```{r echo = FALSE}
+
+ggplot(aes(x =volatile.acidity, y = fixed.acidity, color = rating), 
+       data = dry_wine_qual)+
+  geom_point(alpha = 0.3)+
+  
+  geom_hline(yintercept = mean(dry_wine_qual$fixed.acidity))+
+  geom_vline(xintercept = mean(dry_wine_qual$volatile.acidity))
+  
+```
+
+no clear patterns here.
+
+Findings so far: excellent wines have lower than average densities and higher than average alcohol content.  These are great features to know for excellent wine because you can find them on the label (density is mass / volume).  The other two variables didn't provide many insights.
+
+Let's check out our other bivariate graphs that we wanted to add another layer to!
+
+
+```{r echo= FALSE}
+sugar_D<-ggplot(aes(x = residual.sugar, y= density), data = dry_wine_qual)+
+  geom_jitter(aes( color = alcohol), alpha = 0.3)+
+  geom_smooth(data =  subset(dry_wine_qual, dry_wine_qual$rating == 'excellent'), aes(linetype = 'dashed'), color = 'pink', method = 'lm')+
+  geom_smooth(data =  subset(dry_wine_qual, dry_wine_qual$rating == 'average'), aes(linetype = 'solid'), color = 'pink', method = 'lm')+
+  labs( title = 'Density versus sugar content',
+        x = 'residual sugar (g/L)',
+        y = 'density (g/cm^3)')+
+  scale_linetype_manual(name = 'linear smooth for:', 
+                        values = c('solid', 'dashed'), 
+                        labels =c( 'excellent', 'average'))+
+  coord_cartesian(ylim = c(0.985, 1.0025), xlim = c(0,25))
+  
+sugar_D
+
+```
+
+so as expected , the higher alcohol content corresponds to the lower densities.  the red line represents the trend for excellent wines, the yellow represents the trend for average wines. For lower sugar ratings, excellent wines tend to have more alcohol and less density than average wines.  However at higher sugar ratings (about 15 g) they have the same trends. 
+
+
+```{r echo = FALSE}
+sugar_TSO2<-ggplot(aes(x = trans_TSO2, y= trans_sug, color = rating), 
+                   data = dry_wine_qual,
+            xlab = 'sqrt of total sulfur dioxide',
+            ylab = 'log10(residual sugar) (g/L)')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'excellent'),
+              method = 'loess')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating == 'average'),
+                method = 'loess')+
+  geom_vline(xintercept = mean(dry_wine_qual$trans_TSO2))+
+  geom_hline(yintercept = mean(dry_wine_qual$trans_sug))
+sugar_TSO2
+```
+
+I was hoping for more.  there are no clusters for ratings, alcohol or density, so I settled on looking at the trend for excelelnt and average.  they both generally follow the same curve.  No insights here.
+
+```{r echo = FALSE}
+D_TSO2<-  ggplot(aes(x = trans_TSO2, y= density, color = rating), 
+                 data = dry_wine_qual,
+                 ylab = 'density (g/L)')+
+  geom_point(alpha = 0.3)+
+  geom_vline(xintercept = mean(dry_wine_qual$trans_TSO2))+
+  geom_hline(yintercept = mean(dry_wine_qual$density))
+D_TSO2
+```
+
+I already knew that excellent wines tend to have a lower density.  It also seems like excellent wines tend to have lower than average levels of total sulfur dioxide.
+
+```{r echo = FALSE}
+TVA_TSO2<-  ggplot(aes(x = total.sulfur.dioxide, y= volatile.acidity, color = rating),
+                   data = dry_wine_qual,
+                   xlab = 'total sulfur dioxide',
+                   ylab = 'volatile acidity')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating =='poor'), 
+            method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating =='average'), 
+            method = 'lm')+
+  geom_smooth(data = subset(dry_wine_qual, dry_wine_qual$rating =='excellent'), 
+            method = 'lm')
+TVA_TSO2
+```
+
+Because both volatile acidity and total sulfur dioxie had a sqrt transformation, I can compare the original values and get the same relationship.  I wanted to look at this relationship because i was surprised that volatile acidity wasn't more of a factor in determining the quality of wine.  Volatile acidity is the measure of wine spoilage (http://waterhouse.ucdavis.edu/whats-in-wine/volatile-acidity), and is a by product of microbial metabolism.  Sulfur dioxide is an anti-microbial additive to wine and it can reduce the amount of volatile acidity in wine.  Interestingly enough, it seems like the sulfur dioxide is doing a more effective job in excellent wines (VA decreases with more SO2), not so much in average and poor wines. ( the VA increases as the SO2 increases!) need to calculate the correlations for the ratings to see if this si a strong, moderate, or weak relationship.
+
+```{r echo = FALSE}
+
+exc_r<-cor(exc_wines$total.sulfur.dioxide, exc_wines$volatile.acidity)
+poor_r<-cor(poor_wines$total.sulfur.dioxide, poor_wines$volatile.acidity)
+avg_r<-cor(avg_wines$total.sulfur.dioxide, avg_wines$volatile.acidity)
+
+print( 'r values for poor wines, avg_wines, and excellent wines respectively')
+print(c(poor_r, avg_r, exc_r))
+
+```
+Okay so not the best correlation or any at all.  This jsut means taht a linear fit is not a good choice to make a model.  I'm still going to go off the trends because I think this is an interesting find!
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+There was only one sweet wine, so  only looked at comparing dry wines (residual sugar <45 g/L). My main features of intrest that I investigated were the fixed acidity, the sqrt of the volatile acidity, the density, and the alcohol content.
+
+Initally I had rejected density as a factor because it was so tightly clustered, but it turns out that density is a clear determining factor for excellent wines.  Also the alcohol content gave clear clusterings for the ratings.  Excellent wines tend to have lower density than average wines.  Also excellent wines tend to have higher alcohol content.  Fixed acidity and volatile acidity didn't yeild any decisive conclusions like density and alcohol.
+
+### Were there any interesting or surprising interactions between features?
+
+I was surprised that high volatile acid levels didn't really affect the ratings.  Volatile acid is acetic acid, the same type of acid that is in vinegar.  I would have expected larger amounts of VA to decrease the quality of the wine.  after doing a bit of research (http://waterhouse.ucdavis.edu/whats-in-wine), mixing in sulfur dioxide is a way to decrease the amount of volatile acid.  When we plot volative acid versus total sulfur dioxide, it turns out excellent wines have a lower VA amounts with higher SO2 levels, but bad and average wines do the opposite!  their VA amounts increase as their SO2 levels increase.
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the \
+strengths and limitations of your model.
+Nope!  No time! and not strong enough correlation between variables.
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo = FALSE}
+ggplot(dry_wine_qual, aes(x=trans_sug, color=rating)) + 
+geom_density()+
+  labs(title = 'Density plot of residual sugar according to rating',
+       x = 'residual sugar (log10)',
+       y = 'density')
+```
+
+### Description One
+I chose to look at a density plot instead of a histogram because the sample sizes for each rating are not even.  there are 20 poor wines, 3817 average wines, and 1060 excellent wines.  By doing a density plot, we can compare each group on an equal level.  When I was trying to normalize the residual sugar histogram, I realized that it became bimodal under the log10 transformation.  The in above plot we can see that each rating density is also bimodal, but excellent wines have a higer density peak at the lower sugar level and poor and average wines have higher densities at higher sugar levels.
+
+
+### Plot Two
+```{r echo = FALSE}
+
+ggplot(aes(x =alcohol, y = density, color = rating, alpha = 1/100), 
+       data = dry_wine_qual, alpha = 0.01)+
+  geom_jitter()+
+  geom_point(data = subset(dry_wine_qual, dry_wine_qual$rating == 'poor'), 
+             size = .25)+
+  labs(title = 'Alcohol content and density for each rating',
+       x = 'alcohol content (% per volume)',
+       y = 'density of wine (g/cm^3)')
+  
+```
+
+### Description Two
+I had begun to think that there wasn't really any one factor that really affected the rating of a wine until I got this graph.  From this graph, it is clear to see that the density of the wine decreases as the alcohol content increases.  All three ratings show that relationship.  But we can see a clustering of the excellent ratings at the higher alcohol contents.  From this graph is, we can say that excellent wines tend to have higher alcohol content.
+
+### Plot Three
+```{r echo = FALSE}
+
+sugar_D<-ggplot(aes(x = residual.sugar, y= density), data = dry_wine_qual)+
+  geom_jitter(aes( color = alcohol), alpha = 1/2)+
+  geom_smooth(data =  subset(dry_wine_qual, dry_wine_qual$rating == 'excellent'),
+              aes(linetype = 'dashed'), color = 'pink', method = 'lm')+
+  geom_smooth(data =  subset(dry_wine_qual, dry_wine_qual$rating == 'average'),
+              aes(linetype = 'solid'), color = 'pink', method = 'lm')+
+  labs( title = 'Density versus sugar content',
+        x = 'residual sugar (g/L)',
+        y = 'density (g/cm^3)')+
+  scale_linetype_manual(name = 'linear smooth for:', 
+                        values = c('solid', 'dashed'), 
+                        labels =c( 'excellent', 'average'))+
+  coord_cartesian(ylim = c(0.985, 1.0025), xlim = c(0,25))
+  
+sugar_D
+```
+
+### Description Three
+Both alcohol and sugar had the strongest correlation with density for our dataset. We can clearly see two bands of color going through the plot, light blue representing high alcohol content sweeping through at lower densities, dark blue representing low alcohol content sweeping up  through the higher densities.  this confirms the findings from plot two that higher alcohol content wines have lower densities.  We can all see that the density of the wine increases as the amount of sugar increases.  When I plotted the linear smooths for average and excellent wine it is interesting to see that excellent wines lie in the high alcohol content band while average wines lie in the low alcohol content band.  This leads me to concluded that exceelent wines tend to have higher alcohol content and lower densities than average wine.
+------
+
+# Reflection
+This project taught me a lot about data exploration.  I realize that having a little bit of knowledge about your data subject is super helpful.  I have pretty much no experience with white wine so I went into this exploration without any preconcieved ideas on what makes a excellent wine.  I do know science and I also have tasted really acidic, or salty, or sweet foods and I know that tolerance and taste preferences play a huge part in how a food gets rated.  I was glad that each wine was rated by at least three different critics so each quality score was an average, not just one person's opinion.  Because I was trying to answer a question that is inherently subjective, I found it really difficult to pinpoint exactly which factors answer that question.  I was able to narrow it down to from 10 to four after the Univariate analysis.  Then I narrowed it down to two, alcohol content and density.  Residual sugar was a definately an intrest, since the sugar level is what determines if a wine is sweet or dry.  There was only one sweet (sugar >45 g/L) wine, so I only did my analysis on the dry whites.  I know that people prefer certain levels of sweetness for thier wines, so I wasn't surprised that it wasn't a desicive factor  like density or alcohol.
+
+Another interesting factor was the free sulfur dioxide level (SO2). SO2 is an antimicrobial added to wine to preserve it.  It is mainly used to prevent the build up of volatile acidity (acetic acid) in the wine.  Free SO2 levels are generally undetectable, but once they exceed 50 ppm (or 50 g/L to keep it within context of the given units), they are detectable by taste and smell.  While SO2 wasn't really a determining factor for quality, it showed some interesting behavoir.  Excellent wines showed decreased levels of volatile acidity for increased levels of SO2, while average and poor wines showed increased levels of volatile acid for increased levles of SO2! Seems like the mix in excellent wines allowes the SO2 to do its thing!
+
+Over all I felt that since I was in the dark about the subject matter, I wanted to explore everything!  I love the ggpairs function because it allowed me to take a snapshot of different pairs and decide which ones I really wanted to play with.  I was honestly shocked that the quality of the wine seems to boil down to alcohol percentage and density.  But in doing some research for this project at my local supermarket, I realized that they are the only things you can know about a wine from the label.  So even if I had found another relationship, I wouldn't be able to use it without a lab!  But on the flip side since I wasn't seeing any relationships I felt like I was going down a rabbit hole with no end in sight!  But that is the nature of EDA.  
+
+While I prefer python for Data Wrangling, R is SO much nicer for visualizations.  I love the adding of layers and figuring out how to incorporate different factors in different ways was really fun.  I love that I can have four different factors on one graph (one per axes, one for color, and one for size).  Talk about powerful information!
+
+If I had more time to really go down the rabbit hole, I would want to try to make up a model for wine quality.  It was facinating to see how transforming one factor by taking a square root or log could have changed the correlations.  Before transforming some variables, I barely saw any correlation between the varaialbes, but witht he transformations it relaly helped bring some patterns to light.
+
+So next time I'm choosing a white wine from this brand, I stand a good chance of choosing an excellent wine if it has an alcohol content greater than 10.5% and a density less than 0.994 g/cm^3.
