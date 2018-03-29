@@ -1,0 +1,9 @@
+#this project focuses on telling a story with your data using Tableau
+# I used my own dataset, Mean years in school (men and women over 25) from Gapminder.org.  
+#This data is old (2009) so I will be working on updating it will UNESCO stats: http://data.uis.unesco.org/Index.aspx?queryid=242
+
+#File details
+#mean years is a .csv file containing my raw data
+#the .ipynb file is my juypter notebook detailing my cleaning efforts
+#The Tableau package is my Tableau notebook.  Here is a link to the final story: https://tinyurl.com/gendergapTableau
+#The Project4 write-up contains a summary of the data, details of my design process, feedback I recieved, a list of resources.
