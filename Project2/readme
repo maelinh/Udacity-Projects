@@ -1,2 +1,8 @@
 #this broject focused on exploratory data analysis.
 # I chose the white wine dataset because 1) I know nothing about wine and 2) it was the largest of the provided options.
+
+File details:
+#Project2.html is a html output of my R markdown
+#Project2.rmd is my R markdown file.  This contains all my explorations, musings, and final analysis.
+#The .ipynb file is a jupyter notebook showing how I created a categorical variable ratings.  I am more comfortable in Python.
+#wineQualityWhite_ratings.csv is my adjusted data set with the new categorical variable.
