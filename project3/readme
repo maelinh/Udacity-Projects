@@ -1,3 +1,12 @@
 #This project was all about data wrangling.
 #Worked in python.  Collected data from file on hand, file from server, and extracting information from twitter API
-#
+
+#file description:
+#act_report.pdf = article describing findings from cleaning the @WeRateDogs twitter
+#image-predictions.tsv = file hosted on Udacity servers
+#patpuppy = image that I included in write-up
+#tweet_json = .txt file containing the twitter data
+#twitter_archive_master = final clean and tidy data set
+# twitter_archive-enhanced(2) = provided file
+#wrangle_act(1) = jupyter notebook detailing wrangling and cleaning efforts
+#wrangle_report = written report detailing wrangling efforts and reflections on the project
